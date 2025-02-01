@@ -2,7 +2,7 @@
 
 ## Overview
 
-E-Commerce-API is a FastAPI application that provides user authentication and Google OAuth login functionality. This README file provides instructions on how to set up and run the project.
+E-Commerce-API is a FastAPI application that provides user authentication. This README file provides instructions on how to set up and run the project.
 
 ## Prerequisites
 
