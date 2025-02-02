@@ -4,11 +4,6 @@ sqlalchemy
 pydantic
 passlib[bcrypt]
 pymysql
-requests
-urllib3
-charset_normalizer
-authlib
-httpx
-python-multipart
 python-jose
-dotenv
+python-multipart
+python-dotenv
