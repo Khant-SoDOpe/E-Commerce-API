@@ -20,6 +20,7 @@ def get_db():
 # Pydantic model for incoming user creation data.
 class UserCreate(BaseModel):
     username: str
+    role: str = "user"  # Set default role to "user"
     email: EmailStr
     phone: str
     password: str
@@ -38,6 +39,7 @@ def read_user(user_id: int, db: Session = Depends(get_db)):
     
     return {
         "id": db_user.id,
+        "role": db_user.role,
         "username": db_user.username,
         "email": db_user.email,
         "phone": db_user.phone,

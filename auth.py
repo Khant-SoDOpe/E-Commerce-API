@@ -29,6 +29,7 @@ def get_db():
 # Pydantic models
 class UserCreate(BaseModel):
     username: str
+    role: str
     email: EmailStr
     phone: str
     password: str
@@ -59,6 +60,7 @@ class TokenData(BaseModel):
 class User(BaseModel):
     id: int
     username: str
+    role: str
     email: EmailStr
     phone: str
     address: str
@@ -146,6 +148,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     user_id = generate_unique_id(db)
     db_user = models.User(
         id=user_id,
+        role=user.role,
         username=user.username,
         email=user.email,
         phone=user.phone,

@@ -10,6 +10,7 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     username = Column(String(255), nullable=False)  # Remove unique constraint
     email = Column(String(255), unique=True, nullable=False)
+    role = Column(String(50), default="user")
     phone = Column(String(20))
     password_hash = Column(String(255))
     address = Column(String(255))
