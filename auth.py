@@ -74,6 +74,15 @@ class User(BaseModel):
     class Config:
         orm_mode = True
 
+class UserUpdate(BaseModel):
+    username: str | None = None
+    phone: str | None = None
+    address: str | None = None
+    city: str | None = None
+    state: str | None = None
+    postal_code: str | None = None
+    new_password: str | None = None
+
 # Set up password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -207,3 +216,43 @@ async def login_for_access_token(
 @router.get("/users/me", response_model=User)
 async def read_users_me(current_user: User = Depends(get_current_active_user)):
     return current_user
+
+# Delete user route
+@router.delete("/delete", response_model=dict)
+def delete_user(email: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    db_user = db.query(models.User).filter(models.User.email == email).first()
+    if not db_user or not verify_password(password, db_user.password_hash):
+        raise HTTPException(status_code=400, detail="Incorrect email or password")
+    
+    db.delete(db_user)
+    db.commit()
+    return {"message": "User deleted successfully"}
+
+# Update user route
+@router.patch("/update", response_model=User)
+def update_user(user_update: UserUpdate = Depends(), email: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    db_user = db.query(models.User).filter(models.User.email == email).first()
+    if not db_user or not verify_password(password, db_user.password_hash):
+        raise HTTPException(status_code=400, detail="Incorrect email or password")
+    
+    if user_update.new_password and verify_password(user_update.new_password, db_user.password_hash):
+        raise HTTPException(status_code=400, detail="New password cannot be the same as the old password")
+    
+    if user_update.username:
+        db_user.username = user_update.username
+    if user_update.phone:
+        db_user.phone = user_update.phone
+    if user_update.address:
+        db_user.address = user_update.address
+    if user_update.city:
+        db_user.city = user_update.city
+    if user_update.state:
+        db_user.state = user_update.state
+    if user_update.postal_code:
+        db_user.postal_code = user_update.postal_code
+    if user_update.new_password:
+        db_user.password_hash = hash_password(user_update.new_password)
+    
+    db.commit()
+    db.refresh(db_user)
+    return db_user
