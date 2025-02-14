@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from database import SessionLocal, engine
 import models
 from pydantic import BaseModel, EmailStr
+import uuid
 
 # Create all database tables (if they don't already exist)
 models.Base.metadata.create_all(bind=engine)
@@ -32,13 +33,18 @@ class UserCreate(BaseModel):
     oauth_id: str = None
 
 @router.get("/users/{user_id}", response_model=dict)
-def read_user(user_id: int, db: Session = Depends(get_db)):
-    db_user = db.query(models.User).filter(models.User.id == user_id).first()
+def read_user(user_id: str, db: Session = Depends(get_db)):
+    try:
+        user_id = uuid.UUID(user_id)
+        db_user = db.query(models.User).filter(models.User.id == user_id).first()
+    except ValueError:
+        db_user = db.query(models.User).filter(models.User.id == user_id).first()
+    
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
     
     return {
-        "id": db_user.id,
+        "id": str(db_user.id),  # Ensure the id is returned as a string
         "role": db_user.role,
         "username": db_user.username,
         "email": db_user.email,

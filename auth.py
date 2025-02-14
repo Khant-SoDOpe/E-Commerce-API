@@ -1,15 +1,15 @@
 from fastapi import FastAPI, HTTPException, Depends, APIRouter, status, Form
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, UUID4
 from database import SessionLocal, engine
 import models
 import logging
 from passlib.context import CryptContext
 import uuid
-import jwt
+import jwt  # Ensure this is the correct import from pyjwt
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from datetime import datetime, timedelta, timezone
-from jwt.exceptions import InvalidTokenError
+from jose.exceptions import JWTError, ExpiredSignatureError, JWTClaimsError
 import os
 from models import User as UserModel
 
@@ -44,11 +44,11 @@ class UserLogin(BaseModel):
     password: str
 
 class UserCreateResponse(BaseModel):
-    id: int
+    id: UUID4
 
 class LoginResponse(BaseModel):
     message: str
-    user_id: int
+    user_id: UUID4
 
 class Token(BaseModel):
     access_token: str
@@ -58,7 +58,7 @@ class TokenData(BaseModel):
     email: str | None = None
 
 class User(BaseModel):
-    id: int
+    id: UUID4
     username: str
     role: str
     email: EmailStr
@@ -98,10 +98,9 @@ def verify_password(plain_password: str, hashed_password: str):
         logging.error(f"Error verifying password: {str(e)}")
         raise HTTPException(status_code=400, detail="Invalid password hash")
 
-# Generate a unique 4-digit ID or UUID for users
-def generate_unique_id(db: Session):
-    new_id = str(uuid.uuid4().int)[:8]
-    return new_id
+# Generate a unique UUID for users
+def generate_unique_id():
+    return str(uuid.uuid4())
 
 # Add a logger for debugging
 logging.basicConfig(level=logging.INFO)
@@ -154,9 +153,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    user_id = generate_unique_id(db)
     db_user = models.User(
-        id=user_id,
         role=user.role,
         username=user.username,
         email=user.email,
