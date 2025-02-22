@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey
+from sqlalchemy import Column, String, DateTime, Boolean, ForeignKey, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, Mapped, mapped_column
@@ -11,8 +11,7 @@ Base = declarative_base()
 class Role(Base):
     __tablename__ = "roles"
     id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = mapped_column(String(255), nullable=False, unique=True)
-    description = mapped_column(String(255), nullable=True)
+    name = mapped_column(String(50), nullable=False, unique=True)
 
 class UserRole(Base):
     __tablename__ = "userroles"
@@ -23,16 +22,18 @@ class User(Base):
     __tablename__ = 'users'
     
     id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    username = mapped_column(String(255), nullable=False)
+    username = mapped_column(String(255), nullable=False, unique=True)
     email = mapped_column(String(255), unique=True, nullable=False)
-    role = mapped_column(String(50), default="user")
-    phone = mapped_column(String(20))
+    phone = mapped_column(String(20), unique=True, nullable=False)
     password_hash = mapped_column(String(255))
-    address = mapped_column(String(255))
-    city = mapped_column(String(100))
-    state = mapped_column(String(100))
-    postal_code = mapped_column(String(20))
+    address = mapped_column(Text, nullable=False)
+    city = mapped_column(String(100), nullable=False)
+    state = mapped_column(String(100), nullable=False)
+    postal_code = mapped_column(String(20), nullable=False)
+    oauth_provider = mapped_column(String(50), nullable=True)
+    oauth_id = mapped_column(String(255), unique=True, nullable=True)
     is_oauth = mapped_column(Boolean, default=False)
+    role = mapped_column(String(50), nullable=False, default="user")  # Add this line
     created_at = mapped_column(DateTime, default=datetime.utcnow)
     updated_at = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     roles: Mapped[List["Role"]] = relationship("Role", lazy="selectin", secondary="userroles")

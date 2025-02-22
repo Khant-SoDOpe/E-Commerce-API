@@ -38,13 +38,15 @@ class UserCreate(BaseModel):
     state: str
     postal_code: str
     is_oauth: bool = False
+    oauth_provider: str | None = None
+    oauth_id: str | None = None  # Add this line
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
 class UserCreateResponse(BaseModel):
-    id: UUID4
+    id: UUID4  # Change this line to use UUID4
 
 class LoginResponse(BaseModel):
     message: str
@@ -60,7 +62,7 @@ class TokenData(BaseModel):
 class User(BaseModel):
     id: UUID4
     username: str
-    role: str
+    role: str  # Ensure this line is included
     email: EmailStr
     phone: str
     address: str
@@ -154,7 +156,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Email already registered")
 
     db_user = models.User(
-        role=user.role,
+        id=uuid.uuid4(),  # Ensure UUID is generated
         username=user.username,
         email=user.email,
         phone=user.phone,
@@ -163,18 +165,25 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
         city=user.city,
         state=user.state,
         postal_code=user.postal_code,
-        is_oauth=user.is_oauth,
+        oauth_provider=user.oauth_provider,
+        oauth_id=user.oauth_id,
     )
     db.add(db_user)
-    try:
+    db.commit()
+    db.refresh(db_user)
+
+    role = db.query(models.Role).filter(models.Role.name == user.role).first()
+    if not role:
+        role = models.Role(id=uuid.uuid4(), name=user.role)  # Ensure UUID is generated
+        db.add(role)
         db.commit()
-        db.refresh(db_user)
-    except Exception as e:
-        db.rollback()
-        logging.error(f"Error creating user: {str(e)}")
-        raise HTTPException(status_code=400, detail="Error creating user")
-    
-    return {"id": db_user.id}
+        db.refresh(role)
+
+    user_role = models.UserRole(user_id=db_user.id, role_id=role.id)
+    db.add(user_role)
+    db.commit()
+
+    return {"id": str(db_user.id)}  # Convert UUID to string for the response
 
 # Login route
 @router.post("/login", response_model=LoginResponse)

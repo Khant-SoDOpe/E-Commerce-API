@@ -4,6 +4,7 @@ from database import SessionLocal, engine
 import models
 from pydantic import BaseModel, EmailStr
 import uuid
+from pydantic import UUID4
 
 # Create all database tables (if they don't already exist)
 models.Base.metadata.create_all(bind=engine)
@@ -33,19 +34,16 @@ class UserCreate(BaseModel):
     oauth_id: str = None
 
 @router.get("/users/{user_id}", response_model=dict)
-def read_user(user_id: str, db: Session = Depends(get_db)):
-    try:
-        user_id = uuid.UUID(user_id)
-        db_user = db.query(models.User).filter(models.User.id == user_id).first()
-    except ValueError:
-        db_user = db.query(models.User).filter(models.User.id == user_id).first()
-    
+def read_user(user_id: UUID4, db: Session = Depends(get_db)):
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
     
+    roles = db.query(models.Role).join(models.UserRole).filter(models.UserRole.user_id == user_id).all()
+    role_names = [role.name for role in roles]
+    
     return {
         "id": str(db_user.id),  # Ensure the id is returned as a string
-        "role": db_user.role,
         "username": db_user.username,
         "email": db_user.email,
         "phone": db_user.phone,
@@ -53,7 +51,9 @@ def read_user(user_id: str, db: Session = Depends(get_db)):
         "city": db_user.city,
         "state": db_user.state,
         "postal_code": db_user.postal_code,
-        "is_oauth": db_user.is_oauth,
+        "oauth_provider": db_user.oauth_provider,
+        "oauth_id": db_user.oauth_id,
         "created_at": db_user.created_at,
-        "updated_at": db_user.updated_at
+        "updated_at": db_user.updated_at,
+        "roles": role_names
     }
