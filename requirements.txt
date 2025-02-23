@@ -1,10 +1,5 @@
 fastapi
-uvicorn
-sqlalchemy
-pydantic
-passlib[bcrypt]
-pymysql
-python-jose
-python-multipart
-python-dotenv
-bcrypt
+fastapi-users[sqlalchemy]
+uvicorn[standard]
+aiosqlite
+asyncpg
