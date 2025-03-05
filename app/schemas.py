@@ -1,25 +1,45 @@
+from uuid import UUID
 import uuid
 from datetime import datetime
 from fastapi_users import schemas
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr
 
 class UserBase(BaseModel):
     username: str
+    email: EmailStr
     phone: str
     address: str
     city: str
     state: str
     postal_code: str
-    oauth_provider: str | None = None
-    oauth_id: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
-class UserRead(schemas.BaseUser[uuid.UUID], UserBase):
-    id: uuid.UUID = Field(default_factory=uuid.uuid4)
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
 
-class UserCreate(schemas.BaseUserCreate, UserBase):
+class PasswordReset(BaseModel):
+    token: str
+    password: str
+
+class UserRead(UserBase, schemas.BaseUser[UUID]):
     pass
 
-class UserUpdate(schemas.BaseUserUpdate, UserBase):
+class UserCreate(UserBase, schemas.BaseUserCreate):
     pass
+
+class UserUpdate(UserBase, schemas.BaseUserUpdate):
+    pass
+
+class ResponseModel(BaseModel):
+    status: str
+    message: str
+
+class ForgotPasswordResponse(ResponseModel):
+    email: str
+
+class ResetPasswordResponse(ResponseModel):
+    user_id: str
+
+class ErrorResponse(ResponseModel):
+    error_type: str

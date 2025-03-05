@@ -3,3 +3,7 @@ fastapi-users[sqlalchemy]
 uvicorn[standard]
 aiosqlite
 asyncpg
+fastapi-mail
+python-dotenv
+PyJWT
+jinja2

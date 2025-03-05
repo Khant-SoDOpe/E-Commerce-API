@@ -4,11 +4,18 @@ from fastapi import Depends
 from fastapi_users.db import SQLAlchemyBaseUserTableUUID, SQLAlchemyUserDatabase
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Text, Integer, TIMESTAMP
+from sqlalchemy import String, Text, Integer, TIMESTAMP, Boolean, UUID
 from sqlalchemy.sql import func
 import os
+from dotenv import load_dotenv
+import uuid
 
-DATABASE_URL = getenv("DATABASE_URL")
+# Load environment variables from .env file
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable is not set")
 
 class Base(DeclarativeBase):
     pass
@@ -16,15 +23,15 @@ class Base(DeclarativeBase):
 class User(SQLAlchemyBaseUserTableUUID, Base):
     __tablename__ = "user"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     username: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     phone: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
-    address: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
-    city: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
-    state: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
-    postal_code: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
-    oauth_provider: Mapped[str | None] = mapped_column(String(50), nullable=True, comment="OAuth provider name if used")
-    oauth_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, comment="OAuth user ID")
+    address: Mapped[str] = mapped_column(Text, nullable=False)
+    city: Mapped[str] = mapped_column(String(100), nullable=False)
+    state: Mapped[str] = mapped_column(String(100), nullable=False)
+    postal_code: Mapped[str] = mapped_column(String(20), nullable=False)
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 

@@ -1,3 +1,5 @@
 .env
 __pycache__
 app/__pycache__
+__DS_Store__
+.DS_Store
