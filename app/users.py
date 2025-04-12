@@ -1,7 +1,7 @@
 import uuid
 from typing import Optional
 import logging
-from fastapi import Depends, Request
+from fastapi import Depends, Request, HTTPException
 from fastapi_users import BaseUserManager, FastAPIUsers, UUIDIDMixin, models
 from fastapi_users.authentication import (
     AuthenticationBackend,
@@ -48,14 +48,14 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
                 user_id = payload.get("user_id")
 
             if not user_id:
-                raise ValueError("Invalid token: no user identifier found")
+                raise HTTPException(status_code=400, detail="Invalid token: no user identifier found")
                 
             return uuid.UUID(user_id)
         except jwt.ExpiredSignatureError:
-            raise ValueError("Token has expired")
+            raise HTTPException(status_code=401, detail="Token has expired")
         except (jwt.InvalidTokenError, ValueError) as e:
             logger.error(f"Token verification failed: {str(e)}")
-            raise ValueError(f"Invalid token: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Invalid token: {str(e)}")
 
     async def on_after_register(self, user: User, request: Optional[Request] = None):
         token = self.generate_verification_token(user)
@@ -70,7 +70,7 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
             logger.info(f"Password reset email sent to user {user.id}")
         except Exception as e:
             logger.error(f"Failed to send password reset email: {str(e)}")
-            raise ValueError("Failed to send password reset email")
+            raise HTTPException(status_code=400, detail="Failed to send password reset email")
 
     async def on_after_request_verify(
         self, user: User, token: str, request: Optional[Request] = None
@@ -83,7 +83,7 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
             user = await self.get(user_id)
             
             if not user:
-                raise ValueError("User not found")
+                raise HTTPException(status_code=403, detail="User not found")
             
             if not user.is_verified:
                 # Create update dictionary with the verified status
@@ -102,7 +102,7 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
             
         except Exception as e:
             logger.error(f"Verification failed: {str(e)}")
-            raise ValueError(f"Verification failed: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Verification failed: {str(e)}")
 
     async def reset_password(self, token: str, password: str, request: Optional[Request] = None):
         try:
@@ -110,7 +110,7 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
             user = await self.get(user_id)
             
             if not user:
-                raise ValueError("User not found")
+                raise HTTPException(status_code=403, detail="User not found")
             
             # Create a proper update model
             user_update = BaseUserUpdate(password=password)
@@ -128,7 +128,7 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
             
         except Exception as e:
             logger.error(f"Password reset failed: {str(e)}")
-            raise ValueError(f"Password reset failed: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Password reset failed: {str(e)}")
 
 
 async def get_user_manager(user_db: SQLAlchemyUserDatabase = Depends(get_user_db)):

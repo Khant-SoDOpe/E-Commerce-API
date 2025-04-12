@@ -1,17 +1,24 @@
 from contextlib import asynccontextmanager
-from fastapi import Depends, FastAPI, HTTPException, Request, responses
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing import List
 import logging
 import os
+from datetime import datetime
 
-from app.db import User, create_db_and_tables
+from app.db import Product, User, get_async_session, create_db_and_tables
+from app.schemas import ProductCreate, ProductRead, ProductUpdate
+from sqlalchemy import Column, DateTime, func, select
+
 from app.schemas import (
     UserCreate, UserRead, UserUpdate,
     PasswordResetRequest, PasswordReset,
     ForgotPasswordResponse, ResetPasswordResponse,
     ErrorResponse
 )
+
 from app.users import (
     auth_backend,
     current_active_user,
@@ -159,3 +166,81 @@ async def reset_password(
 @app.get("/authenticated-route")
 async def authenticated_route(user: User = Depends(current_active_user)):
     return {"message": f"Hello {user.email}!"}
+
+
+# Add these routes before the authenticated_route
+@app.post("/products/", response_model=ProductRead, tags=["products"])
+async def create_product(
+    product: ProductCreate,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    if not user.is_superuser:
+        raise HTTPException(status_code=403, detail="Only superusers can add products")
+    
+    # Parse discount_start and discount_end into datetime objects
+    product_data = product.model_dump()
+    if "discount_start" in product_data and product_data["discount_start"]:
+        product_data["discount_start"] = datetime.fromisoformat(product_data["discount_start"].replace("Z", "+00:00"))
+    if "discount_end" in product_data and product_data["discount_end"]:
+        product_data["discount_end"] = datetime.fromisoformat(product_data["discount_end"].replace("Z", "+00:00"))
+    
+    db_product = Product(**product_data)
+    db.add(db_product)
+    await db.commit()
+    await db.refresh(db_product)
+    return db_product
+
+@app.get("/products/", response_model=List[ProductRead], tags=["products"])
+async def read_products(
+    skip: int = 0,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_async_session)
+):
+    result = await db.execute(select(Product).offset(skip).limit(limit))
+    products = result.scalars().all()
+    return products
+
+@app.get("/products/{product_id}", response_model=ProductRead, tags=["products"])
+async def read_product(
+    product_id: int,
+    db: AsyncSession = Depends(get_async_session)
+):
+    product = await db.get(Product, product_id)
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return product
+
+@app.put("/products/{product_id}", response_model=ProductRead, tags=["products"])
+async def update_product(
+    product_id: int,
+    product_update: ProductUpdate,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    if not user.is_superuser:
+        raise HTTPException(status_code=403, detail="Only superusers can update products")
+    db_product = await db.get(Product, product_id)
+    if db_product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+    update_data = product_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_product, key, value)
+    await db.commit()
+    await db.refresh(db_product)
+    return db_product
+
+@app.delete("/products/{product_id}", tags=["products"])
+async def delete_product(
+    product_id: int,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    if not user.is_superuser:
+        raise HTTPException(status_code=403, detail="Only superusers can delete products")
+    db_product = await db.get(Product, product_id)
+    if db_product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+    await db.delete(db_product)
+    await db.commit()
+    return {"message": "Product deleted successfully"}

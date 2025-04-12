@@ -3,6 +3,7 @@ from pydantic import EmailStr
 import os
 from dotenv import load_dotenv
 from typing import List
+from fastapi import HTTPException
 
 # Load environment variables
 load_dotenv()
@@ -18,6 +19,9 @@ conf = ConnectionConfig(
     USE_CREDENTIALS=True,
     VALIDATE_CERTS=True
 )
+
+if not conf.MAIL_USERNAME or not conf.MAIL_PASSWORD:
+    raise ValueError("Email configuration is incomplete. Check MAIL_USERNAME and MAIL_PASSWORD.")
 
 async def send_verification_email(email: EmailStr, token: str):
     api_url = os.getenv("API_URL", "http://localhost:8000")
@@ -42,7 +46,7 @@ async def send_verification_email(email: EmailStr, token: str):
         await fm.send_message(message)
     except Exception as e:
         print(f"Error sending email: {str(e)}")
-        raise
+        raise HTTPException(status_code=500, detail=f"Error sending email: {str(e)}")
 
 async def send_password_reset_email(email: EmailStr, token: str):
     api_url = os.getenv("API_URL", "http://localhost:8000")
@@ -68,4 +72,4 @@ async def send_password_reset_email(email: EmailStr, token: str):
         await fm.send_message(message)
     except Exception as e:
         logger.error(f"Error sending password reset email: {str(e)}")
-        raise
+        raise HTTPException(status_code=500, detail=f"Error sending password reset email: {str(e)}")

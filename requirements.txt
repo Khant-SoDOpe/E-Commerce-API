@@ -7,3 +7,4 @@ fastapi-mail
 python-dotenv
 PyJWT
 jinja2
+sqlalchemy
