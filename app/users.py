@@ -86,18 +86,14 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
                 raise HTTPException(status_code=403, detail="User not found")
             
             if not user.is_verified:
-                # Create update dictionary with the verified status
+                # Update the user with verified status and updated_at timestamp
                 update_dict = {
                     "is_verified": True,
-                    "updated_at": datetime.utcnow()
+                    "updated_at": datetime.utcnow()  # Update the updated_at field
                 }
-                
-                # Update the user
                 await self.user_db.update(user, update_dict)
-                
-                # Refresh user data
-                user = await self.get(user_id)
-                
+                user = await self.get(user_id)  # Refresh user data
+            
             return user
             
         except Exception as e:
@@ -112,16 +108,15 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
             if not user:
                 raise HTTPException(status_code=403, detail="User not found")
             
-            # Create a proper update model
+            # Update the user with the new password and updated_at timestamp
             user_update = BaseUserUpdate(password=password)
-            
-            # Use the parent class's update method with the proper model
             await super().update(
                 user_update=user_update,
                 user=user,
                 safe=True,
                 request=request
             )
+            await self.user_db.update(user, {"updated_at": datetime.utcnow()})  # Update the updated_at field
             
             logger.info(f"Password successfully reset for user {user.id}")
             return user
