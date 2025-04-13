@@ -7,6 +7,7 @@ from typing import List
 import logging
 import os
 from datetime import datetime
+from uuid import UUID
 
 from app.db import Product, User, Category, get_async_session, create_db_and_tables
 from app.schemas import ProductCreate, ProductRead, ProductUpdate
@@ -180,6 +181,11 @@ async def create_product(
     if not user.is_superuser:
         raise HTTPException(status_code=403, detail="Only superusers can add products")
     
+    # Validate the existence of the category_id
+    category = await db.get(Category, product.category_id)
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    
     # Parse discount_start and discount_end into datetime objects
     product_data = product.model_dump()
     if "discount_start" in product_data and product_data["discount_start"]:
@@ -205,24 +211,24 @@ async def read_products(
 
 @app.get("/products/{product_id}", response_model=ProductRead, tags=["products"])
 async def read_product(
-    product_id: int,
+    product_id: UUID,  # Updated to product_id
     db: AsyncSession = Depends(get_async_session)
 ):
-    product = await db.get(Product, product_id)
+    product = await db.get(Product, product_id)  # Updated to product_id
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
     return product
 
 @app.put("/products/{product_id}", response_model=ProductRead, tags=["products"])
 async def update_product(
-    product_id: int,
+    product_id: UUID,  # Updated to product_id
     product_update: ProductUpdate,
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session)
 ):
     if not user.is_superuser:
         raise HTTPException(status_code=403, detail="Only superusers can update products")
-    db_product = await db.get(Product, product_id)
+    db_product = await db.get(Product, product_id)  # Updated to product_id
     if db_product is None:
         raise HTTPException(status_code=404, detail="Product not found")
     update_data = product_update.model_dump(exclude_unset=True)
@@ -234,13 +240,13 @@ async def update_product(
 
 @app.delete("/products/{product_id}", tags=["products"])
 async def delete_product(
-    product_id: int,
+    product_id: UUID,  # Updated to product_id
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session)
 ):
     if not user.is_superuser:
         raise HTTPException(status_code=403, detail="Only superusers can delete products")
-    db_product = await db.get(Product, product_id)
+    db_product = await db.get(Product, product_id)  # Updated to product_id
     if db_product is None:
         raise HTTPException(status_code=404, detail="Product not found")
     await db.delete(db_product)
@@ -274,7 +280,7 @@ async def read_categories(
 
 @app.get("/categories/{category_id}", response_model=CategoryRead, tags=["categories"])
 async def read_category(
-    category_id: int,
+    category_id: UUID,
     db: AsyncSession = Depends(get_async_session)
 ):
     category = await db.get(Category, category_id)
@@ -284,7 +290,7 @@ async def read_category(
 
 @app.put("/categories/{category_id}", response_model=CategoryRead, tags=["categories"])
 async def update_category(
-    category_id: int,
+    category_id: UUID,
     category_update: CategoryUpdate,
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session)
@@ -303,7 +309,7 @@ async def update_category(
 
 @app.delete("/categories/{category_id}", tags=["categories"])
 async def delete_category(
-    category_id: int,
+    category_id: UUID,
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session)
 ):

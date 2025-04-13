@@ -1,4 +1,4 @@
-from uuid import UUID
+from uuid import UUID, uuid4  # Import uuid4 for generating default UUIDs
 import uuid
 from datetime import datetime
 from fastapi_users import schemas
@@ -48,7 +48,7 @@ class ErrorResponse(ResponseModel):
 
 class ProductBase(BaseModel):
     name: str
-    category_id: int
+    category_id: UUID
     price: float
     stock: int = 0
     status: bool = True
@@ -58,8 +58,9 @@ class ProductBase(BaseModel):
     discount_end: Optional[datetime] = None
 
 class ProductCreate(BaseModel):
+    product_id: UUID = uuid4()  # Auto-generate product_id
     name: str
-    category_id: int
+    category_id: UUID  # Ensure category_id is required
     price: float
     stock: int
     status: bool
@@ -70,7 +71,7 @@ class ProductCreate(BaseModel):
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
-    category_id: Optional[int] = None
+    category_id: Optional[UUID] = None
     price: Optional[float] = None
     stock: Optional[int] = None
     status: Optional[bool] = None
@@ -80,7 +81,7 @@ class ProductUpdate(BaseModel):
     discount_end: Optional[datetime] = None
 
 class ProductRead(ProductBase):
-    id: int
+    product_id: UUID  # Renamed from id to product_id
     created_at: datetime
     updated_at: datetime
 
@@ -97,7 +98,7 @@ class CategoryUpdate(BaseModel):
     name: Optional[str] = None
 
 class CategoryRead(CategoryBase):
-    id: int
+    id: UUID
     created_at: datetime
     updated_at: datetime
 
