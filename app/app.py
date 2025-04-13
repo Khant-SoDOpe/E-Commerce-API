@@ -8,7 +8,7 @@ import logging
 import os
 from datetime import datetime
 
-from app.db import Product, User, get_async_session, create_db_and_tables
+from app.db import Product, User, Category, get_async_session, create_db_and_tables
 from app.schemas import ProductCreate, ProductRead, ProductUpdate
 from sqlalchemy import Column, DateTime, func, select
 
@@ -16,7 +16,9 @@ from app.schemas import (
     UserCreate, UserRead, UserUpdate,
     PasswordResetRequest, PasswordReset,
     ForgotPasswordResponse, ResetPasswordResponse,
-    ErrorResponse
+    ErrorResponse,
+    ProductCreate, ProductRead, ProductUpdate,
+    CategoryCreate, CategoryRead, CategoryUpdate  # Add these imports
 )
 
 from app.users import (
@@ -244,3 +246,72 @@ async def delete_product(
     await db.delete(db_product)
     await db.commit()
     return {"message": "Product deleted successfully"}
+
+@app.post("/categories/", response_model=CategoryRead, tags=["categories"])
+async def create_category(
+    category: CategoryCreate,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    if not user.is_superuser:
+        raise HTTPException(status_code=403, detail="Only superusers can add categories")
+    
+    db_category = Category(**category.model_dump())
+    db.add(db_category)
+    await db.commit()
+    await db.refresh(db_category)
+    return db_category
+
+@app.get("/categories/", response_model=List[CategoryRead], tags=["categories"])
+async def read_categories(
+    skip: int = 0,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_async_session)
+):
+    result = await db.execute(select(Category).offset(skip).limit(limit))
+    categories = result.scalars().all()
+    return categories
+
+@app.get("/categories/{category_id}", response_model=CategoryRead, tags=["categories"])
+async def read_category(
+    category_id: int,
+    db: AsyncSession = Depends(get_async_session)
+):
+    category = await db.get(Category, category_id)
+    if category is None:
+        raise HTTPException(status_code=404, detail="Category not found")
+    return category
+
+@app.put("/categories/{category_id}", response_model=CategoryRead, tags=["categories"])
+async def update_category(
+    category_id: int,
+    category_update: CategoryUpdate,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    if not user.is_superuser:
+        raise HTTPException(status_code=403, detail="Only superusers can update categories")
+    db_category = await db.get(Category, category_id)
+    if db_category is None:
+        raise HTTPException(status_code=404, detail="Category not found")
+    update_data = category_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_category, key, value)
+    await db.commit()
+    await db.refresh(db_category)
+    return db_category
+
+@app.delete("/categories/{category_id}", tags=["categories"])
+async def delete_category(
+    category_id: int,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    if not user.is_superuser:
+        raise HTTPException(status_code=403, detail="Only superusers can delete categories")
+    db_category = await db.get(Category, category_id)
+    if db_category is None:
+        raise HTTPException(status_code=404, detail="Category not found")
+    await db.delete(db_category)
+    await db.commit()
+    return {"message": "Category deleted successfully"}
