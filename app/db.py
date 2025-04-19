@@ -38,6 +38,8 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # Ensure correct column name
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+    admin_granted_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID, nullable=True)
+    admin_granted_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
 
 engine = create_async_engine(DATABASE_URL)
 async_session_maker = async_sessionmaker(engine, expire_on_commit=False)

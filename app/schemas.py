@@ -127,3 +127,15 @@ class CategoryRead(CategoryBase):
         json_encoders = {
             datetime: lambda v: v.astimezone(JST).strftime("%Y-%m-%d-%H-%M-%S")
         }
+
+class AdminCreate(BaseModel):
+    user_id: UUID
+
+class AdminRead(UserRead):
+    admin_granted_by: Optional[UUID] = None
+    admin_granted_at: Optional[datetime] = None
+
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.astimezone(JST).strftime("%Y-%m-%d-%H-%M-%S")
+        }

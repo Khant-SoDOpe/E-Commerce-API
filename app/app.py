@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status, APIRouter
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +19,8 @@ from app.schemas import (
     ForgotPasswordResponse, ResetPasswordResponse,
     ErrorResponse,
     ProductCreate, ProductRead, ProductUpdate,
-    CategoryCreate, CategoryRead, CategoryUpdate  # Add these imports
+    CategoryCreate, CategoryRead, CategoryUpdate,
+    AdminCreate, AdminRead  # Add these imports
 )
 
 from app.users import (
@@ -324,3 +325,82 @@ async def delete_category(
     await db.delete(db_category)
     await db.commit()
     return {"message": "Category deleted successfully"}
+
+# Admin router
+admin_router = APIRouter(prefix="/admin", tags=["admin"])
+
+@admin_router.get(
+    "/list",
+    response_model=List[AdminRead],
+    summary="List all admins",
+    description="Retrieve a list of all admin users, including details about who granted them admin privileges and when."
+)
+async def list_admins(
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    if not user.is_superuser:
+        raise HTTPException(status_code=403, detail="Only superusers can access this route")
+    
+    result = await db.execute(select(User).where(User.is_superuser == True))
+    admins = result.scalars().all()
+    return admins
+
+@admin_router.post(
+    "/add",
+    response_model=AdminRead,
+    summary="Add a new admin",
+    description="Promote a user to admin by setting their `is_superuser` flag to `True`. Tracks who granted the admin privileges and when."
+)
+async def add_admin(
+    admin_data: AdminCreate,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    if not user.is_superuser:
+        raise HTTPException(status_code=403, detail="Only superusers can add admins")
+    
+    new_admin = await db.get(User, admin_data.user_id)
+    if not new_admin:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if new_admin.is_superuser:
+        raise HTTPException(status_code=400, detail="User is already an admin")
+    
+    new_admin.is_superuser = True
+    new_admin.admin_granted_by = user.id
+    new_admin.admin_granted_at = datetime.now()
+    await db.commit()
+    await db.refresh(new_admin)
+    return new_admin
+
+@admin_router.delete(
+    "/remove/{admin_id}",
+    response_model=AdminRead,
+    summary="Remove an admin",
+    description="Revoke admin privileges from a user by setting their `is_superuser` flag to `False`. Clears the tracking fields for admin privileges."
+)
+async def remove_admin(
+    admin_id: UUID,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    if not user.is_superuser:
+        raise HTTPException(status_code=403, detail="Only superusers can remove admins")
+    
+    admin = await db.get(User, admin_id)
+    if not admin:
+        raise HTTPException(status_code=404, detail="Admin not found")
+    
+    if not admin.is_superuser:
+        raise HTTPException(status_code=400, detail="User is not an admin")
+    
+    admin.is_superuser = False
+    admin.admin_granted_by = None
+    admin.admin_granted_at = None
+    await db.commit()
+    await db.refresh(admin)
+    return admin
+
+# Include the admin router
+app.include_router(admin_router)

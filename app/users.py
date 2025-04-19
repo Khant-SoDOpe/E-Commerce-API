@@ -13,8 +13,9 @@ import jwt
 from datetime import datetime, timedelta
 from app.db import User, get_user_db
 from app.email import send_verification_email, send_password_reset_email
-from fastapi_users.schemas import BaseUserUpdate
+from fastapi_users.schemas import BaseUserUpdate, BaseUserCreate  # Correct import for BaseUserCreate
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError  # Import IntegrityError
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +151,26 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
                 )
         # For other exceptions, use the default behavior
         return await super().on_exception(exception, request)
+
+    async def create(self, user_create: BaseUserCreate, safe: bool = False, request: Optional[Request] = None) -> User:
+        try:
+            return await super().create(user_create, safe=safe, request=request)
+        except IntegrityError as e:
+            if "user_phone_key" in str(e.orig):
+                raise HTTPException(
+                    status_code=400,
+                    detail="A user with this phone number already exists."
+                )
+            elif "user_username_key" in str(e.orig):
+                raise HTTPException(
+                    status_code=400,
+                    detail="A user with this username already exists."
+                )
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="A database integrity error occurred."
+                )
 
 
 async def get_user_manager(user_db: SQLAlchemyUserDatabase = Depends(get_user_db)):

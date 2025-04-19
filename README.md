@@ -1,6 +1,6 @@
 # E-Commerce API
 
-This project is a FastAPI-based backend for an e-commerce platform. It includes user authentication, product and category management, email notifications, and database integration.
+This project is a FastAPI-based backend for an e-commerce platform. It includes user authentication, product and category management, admin management, email notifications, and database integration.
 
 ---
 
@@ -14,8 +14,16 @@ This project is a FastAPI-based backend for an e-commerce platform. It includes 
   - Password reset (`/auth/forgot-password`, `/auth/reset-password`)
   - Email verification (`/auth/verify`)
 - Custom error handling for login failures with descriptive error messages.
+- Prevents duplicate registration by enforcing unique constraints on `email`, `username`, and `phone`.
 
-### 2. **Product Management**
+### 2. **Admin Management**
+- Routes for managing admin users:
+  - List all admins (`/admin/list`)
+  - Add a new admin (`/admin/add`)
+  - Remove an admin (`/admin/remove/{admin_id}`)
+- Tracks who granted admin privileges and when.
+
+### 3. **Product Management**
 - CRUD operations for products:
   - Create (`/products/`)
   - Read (`/products/` and `/products/{product_id}`)
@@ -23,7 +31,7 @@ This project is a FastAPI-based backend for an e-commerce platform. It includes 
   - Delete (`/products/{product_id}`)
 - Superuser-only access for creating, updating, and deleting products.
 
-### 3. **Category Management**
+### 4. **Category Management**
 - CRUD operations for categories:
   - Create (`/categories/`)
   - Read (`/categories/` and `/categories/{category_id}`)
@@ -31,22 +39,23 @@ This project is a FastAPI-based backend for an e-commerce platform. It includes 
   - Delete (`/categories/{category_id}`)
 - Superuser-only access for creating, updating, and deleting categories.
 
-### 4. **Email Notifications**
+### 5. **Email Notifications**
 - Email verification and password reset emails using `fastapi-mail`.
 - Configurable email templates with links for verification and password reset.
 
-### 5. **Database Integration**
+### 6. **Database Integration**
 - PostgreSQL database with `SQLAlchemy` and `asyncpg`.
 - Models for `User`, `Product`, and `Category` with UUID primary keys.
 - Automatic timestamps for `created_at` and `updated_at` fields.
+- Tracks admin privileges with `admin_granted_by` and `admin_granted_at` fields.
 
-### 6. **Datetime Formatting**
+### 7. **Datetime Formatting**
 - All datetime fields are serialized in Japan Standard Time (JST) format (`Year-Month-Date-Hour-Minutes-Second`).
 
-### 7. **Environment Configuration**
+### 8. **Environment Configuration**
 - `.env` file for managing sensitive configurations like database URL, email settings, and CORS origins.
 
-### 8. **CORS Middleware**
+### 9. **CORS Middleware**
 - Configured to allow requests from specific origins.
 
 ---
@@ -64,6 +73,8 @@ E-Commerce-API/
 ├── main.py                  # Entry point for running the application
 ├── requirements.txt         # Python dependencies
 ├── .env                     # Environment variables
+├── .env.example             # Example environment variables
+├── .gitignore               # Git ignore file
 ```
 
 ---
@@ -133,9 +144,16 @@ uvicorn app.app:app --reload
     }
     ```
 - **POST** `/auth/register`: Register a new user.
+  - Prevents duplicate registration by enforcing unique constraints on `email`, `username`, and `phone`.
 - **POST** `/auth/forgot-password`: Request a password reset email.
 - **POST** `/auth/reset-password`: Reset the user's password.
 - **GET** `/auth/verify`: Verify the user's email.
+
+### Admin Management
+- **GET** `/admin/list`: List all admin users.
+- **POST** `/admin/add`: Add a new admin.
+  - Tracks who granted admin privileges and when.
+- **DELETE** `/admin/remove/{admin_id}`: Remove an admin.
 
 ### Products
 - **POST** `/products/`: Create a new product (superuser only).
@@ -157,13 +175,14 @@ uvicorn app.app:app --reload
 
 ### 1. **`app/app.py`**
 - Main FastAPI application.
-- Includes routes for authentication, products, and categories.
+- Includes routes for authentication, products, categories, and admin management.
 - Configures CORS middleware and exception handling.
 
 ### 2. **`app/db.py`**
 - Defines database models for `User`, `Product`, and `Category`.
 - Configures `SQLAlchemy` with PostgreSQL.
 - Provides session management and database initialization.
+- Tracks admin privileges with `admin_granted_by` and `admin_granted_at`.
 
 ### 3. **`app/email.py`**
 - Handles email notifications for user actions like registration and password reset.
@@ -175,7 +194,7 @@ uvicorn app.app:app --reload
 
 ### 5. **`app/users.py`**
 - Implements user management and authentication using `fastapi-users`.
-- Customizes error handling for login failures.
+- Customizes error handling for login failures and duplicate registration.
 
 ### 6. **`main.py`**
 - Entry point for running the application in production mode with `uvicorn`.
