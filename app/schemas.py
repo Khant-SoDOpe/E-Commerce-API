@@ -1,9 +1,11 @@
 from uuid import UUID, uuid4  # Import uuid4 for generating default UUIDs
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from fastapi_users import schemas
 from pydantic import BaseModel, EmailStr
 from typing import Optional
+
+JST = timezone(timedelta(hours=9))  # Define Japan Standard Time (UTC+9)
 
 class UserBase(BaseModel):
     username: str
@@ -24,13 +26,28 @@ class PasswordReset(BaseModel):
     password: str
 
 class UserRead(UserBase, schemas.BaseUser[UUID]):
-    pass
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.astimezone(JST).strftime("%Y-%m-%d-%H-%M-%S")
+        }
 
 class UserCreate(UserBase, schemas.BaseUserCreate):
-    pass
+    is_active: Optional[bool] = True  # Default to True
+    is_superuser: Optional[bool] = False  # Default to False
+    is_verified: Optional[bool] = False  # Default to False
+    created_at: Optional[datetime] = None  # Default to None, will be set by the database
+    updated_at: Optional[datetime] = None  # Default to None, will be set by the database
+
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.astimezone(JST).strftime("%Y-%m-%d-%H-%M-%S")
+        }
 
 class UserUpdate(UserBase, schemas.BaseUserUpdate):
-    pass
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.astimezone(JST).strftime("%Y-%m-%d-%H-%M-%S")
+        }
 
 class ResponseModel(BaseModel):
     status: str
@@ -87,6 +104,9 @@ class ProductRead(ProductBase):
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.astimezone(JST).strftime("%Y-%m-%d-%H-%M-%S")
+        }
 
 class CategoryBase(BaseModel):
     name: str
@@ -104,3 +124,6 @@ class CategoryRead(CategoryBase):
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.astimezone(JST).strftime("%Y-%m-%d-%H-%M-%S")
+        }

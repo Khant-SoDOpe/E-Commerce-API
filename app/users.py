@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from app.db import User, get_user_db
 from app.email import send_verification_email, send_password_reset_email
 from fastapi_users.schemas import BaseUserUpdate
+from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
     def generate_verification_token(self, user: User) -> str:
         data = {
             "user_id": str(user.id),  # Convert UUID to string
-            "exp": datetime.utcnow() + timedelta(hours=24),
+            "exp": datetime.now() + timedelta(hours=24),
             "aud": "fastapi-users:verify"  # Add audience claim
         }
         return jwt.encode(data, self.verification_token_secret, algorithm="HS256")
@@ -89,7 +90,7 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
                 # Update the user with verified status and updated_at timestamp
                 update_dict = {
                     "is_verified": True,
-                    "updated_at": datetime.utcnow()  # Update the updated_at field
+                    "updated_at": datetime.now()  # Update the updated_at field
                 }
                 await self.user_db.update(user, update_dict)
                 user = await self.get(user_id)  # Refresh user data
@@ -116,7 +117,7 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
                 safe=True,
                 request=request
             )
-            await self.user_db.update(user, {"updated_at": datetime.utcnow()})  # Update the updated_at field
+            await self.user_db.update(user, {"updated_at": datetime.now()})  # Update the updated_at field
             
             logger.info(f"Password successfully reset for user {user.id}")
             return user
@@ -124,6 +125,31 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
         except Exception as e:
             logger.error(f"Password reset failed: {str(e)}")
             raise HTTPException(status_code=400, detail=f"Password reset failed: {str(e)}")
+
+    async def on_exception(self, exception: Exception, request: Optional[Request] = None):
+        if isinstance(exception, HTTPException):
+            if exception.status_code == 401:
+                # Custom error response for invalid login credentials
+                return JSONResponse(
+                    status_code=401,
+                    content={
+                        "status": "error",
+                        "message": "Invalid login credentials. Please check your email and password.",
+                        "error_type": "authentication_error"
+                    }
+                )
+            elif exception.status_code == 404:
+                # Custom error response for account not found
+                return JSONResponse(
+                    status_code=404,
+                    content={
+                        "status": "error",
+                        "message": "Account not found. Please check your email or register for a new account.",
+                        "error_type": "account_not_found"
+                    }
+                )
+        # For other exceptions, use the default behavior
+        return await super().on_exception(exception, request)
 
 
 async def get_user_manager(user_db: SQLAlchemyUserDatabase = Depends(get_user_db)):

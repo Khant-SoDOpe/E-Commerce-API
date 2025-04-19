@@ -141,7 +141,7 @@ async def reset_password(
 ):
     try:
         user = await user_manager.reset_password(reset_data.token, reset_data.password, request)
-        user.updated_at = datetime.utcnow()  # Update the updated_at field
+        user.updated_at = datetime.now()  # Update the updated_at field
         return ResetPasswordResponse(
             status="success",
             message="Password has been reset successfully",
@@ -233,7 +233,7 @@ async def update_product(
     if db_product is None:
         raise HTTPException(status_code=404, detail="Product not found")
     update_data = product_update.model_dump(exclude_unset=True)
-    update_data["updated_at"] = datetime.utcnow()  # Update the updated_at field
+    update_data["updated_at"] = datetime.now()  # Update the updated_at field
     for key, value in update_data.items():
         setattr(db_product, key, value)
     await db.commit()
@@ -303,7 +303,7 @@ async def update_category(
     if db_category is None:
         raise HTTPException(status_code=404, detail="Category not found")
     update_data = category_update.model_dump(exclude_unset=True)
-    update_data["updated_at"] = datetime.utcnow()  # Update the updated_at field
+    update_data["updated_at"] = datetime.now()  # Update the updated_at field
     for key, value in update_data.items():
         setattr(db_category, key, value)
     await db.commit()
