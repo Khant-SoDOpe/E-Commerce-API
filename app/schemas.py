@@ -8,6 +8,7 @@ from typing import Optional
 JST = timezone(timedelta(hours=9))  # Define Japan Standard Time (UTC+9)
 
 class UserBase(BaseModel):
+    """Use alias generators for consistent field naming."""
     username: str
     email: EmailStr
     phone: str
@@ -15,8 +16,12 @@ class UserBase(BaseModel):
     city: str
     state: str
     postal_code: str
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        alias_generator = lambda field: field.lower()
+        allow_population_by_field_name = True
 
 class PasswordResetRequest(BaseModel):
     email: EmailStr

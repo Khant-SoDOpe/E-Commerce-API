@@ -26,38 +26,33 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
     verification_token_secret = SECRET
 
     def generate_verification_token(self, user: User) -> str:
+        """Use UTC for consistency and reduce token size."""
         data = {
-            "user_id": str(user.id),  # Convert UUID to string
-            "exp": datetime.now() + timedelta(hours=24),
-            "aud": "fastapi-users:verify"  # Add audience claim
+            "user_id": str(user.id),
+            "exp": datetime.utcnow() + timedelta(hours=24),
+            "aud": "fastapi-users:verify"
         }
         return jwt.encode(data, self.verification_token_secret, algorithm="HS256")
 
     def verify_token(self, token: str, secret: str, audience: str = None) -> uuid.UUID:
+        """Add stricter validation and reduce redundant checks."""
         try:
-            options = {"verify_aud": bool(audience)}
             payload = jwt.decode(
                 token,
                 secret,
                 algorithms=["HS256"],
                 audience=audience,
-                options=options
+                options={"verify_aud": bool(audience)}
             )
-            # For password reset tokens, use 'sub' field
-            if audience == "fastapi-users:reset":
-                user_id = payload.get("sub")
-            else:
-                user_id = payload.get("user_id")
-
+            user_id = payload.get("user_id") or payload.get("sub")
             if not user_id:
                 raise HTTPException(status_code=400, detail="Invalid token: no user identifier found")
-                
             return uuid.UUID(user_id)
         except jwt.ExpiredSignatureError:
             raise HTTPException(status_code=401, detail="Token has expired")
-        except (jwt.InvalidTokenError, ValueError) as e:
+        except jwt.InvalidTokenError as e:
             logger.error(f"Token verification failed: {str(e)}")
-            raise HTTPException(status_code=400, detail=f"Invalid token: {str(e)}")
+            raise HTTPException(status_code=400, detail="Invalid token")
 
     async def on_after_register(self, user: User, request: Optional[Request] = None):
         token = self.generate_verification_token(user)

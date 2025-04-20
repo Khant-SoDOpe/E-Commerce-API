@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Request, status, APIRouter
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 import logging
@@ -20,7 +21,7 @@ from app.schemas import (
     ErrorResponse,
     ProductCreate, ProductRead, ProductUpdate,
     CategoryCreate, CategoryRead, CategoryUpdate,
-    AdminCreate, AdminRead  # Add these imports
+    AdminCreate, AdminRead
 )
 
 from app.users import (
@@ -40,14 +41,19 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+# Add HTTPS redirection middleware for production
+if os.getenv("ENV", "development") == "production":
+    app.add_middleware(HTTPSRedirectMiddleware)
+
 # Add CORS middleware
-origins = os.getenv("CORS_ORIGINS", "http://localhost:8000,http://localhost:5173").split(",")
+origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
+    expose_headers=["Authorization"],
 )
 
 app.include_router(
@@ -74,7 +80,7 @@ app.include_router(
     tags=["users"],
 )
 
-@app.get("/auth/verify")
+@app.get("/auth/verify", responses={200: {"description": "Email verified successfully"}})
 async def verify_email(token: str, user_manager=Depends(get_user_manager)):
     try:
         logger.debug(f"Verifying token: {token}")
@@ -99,7 +105,7 @@ async def verify_email(token: str, user_manager=Depends(get_user_manager)):
     "/auth/forgot-password",
     response_model=ForgotPasswordResponse,
     responses={
-        200: {"model": ForgotPasswordResponse},
+        200: {"description": "Password reset instructions sent to the email"},
         500: {"model": ErrorResponse}
     }
 )
@@ -112,14 +118,12 @@ async def forgot_password(
         if user:
             token = await user_manager.forgot_password(user, None)
             logger.info(f"Password reset email sent for user: {user.id}")
-            return ForgotPasswordResponse(
-                status="success",
-                message="Password reset instructions sent to your email",
-                email=request.email
-            )
+        else:
+            logger.info(f"No user found with email: {request.email}")
     except Exception as e:
         logger.error(f"Password reset request failed: {str(e)}")
     
+    # Always return the email in the response, even if the user does not exist
     return ForgotPasswordResponse(
         status="success",
         message="If the email exists, password reset instructions will be sent",
@@ -130,7 +134,7 @@ async def forgot_password(
     "/auth/reset-password",
     response_model=ResetPasswordResponse,
     responses={
-        200: {"model": ResetPasswordResponse},
+        200: {"description": "Password reset successfully"},
         400: {"model": ErrorResponse},
         500: {"model": ErrorResponse}
     }
@@ -142,7 +146,7 @@ async def reset_password(
 ):
     try:
         user = await user_manager.reset_password(reset_data.token, reset_data.password, request)
-        user.updated_at = datetime.now()  # Update the updated_at field
+        user.updated_at = datetime.now()
         return ResetPasswordResponse(
             status="success",
             message="Password has been reset successfully",
@@ -168,13 +172,16 @@ async def reset_password(
             }
         )
 
-@app.get("/authenticated-route")
+@app.get("/authenticated-route", responses={200: {"description": "Authenticated route accessed successfully"}})
 async def authenticated_route(user: User = Depends(current_active_user)):
     return {"message": f"Hello {user.email}!"}
 
-
-# Add these routes before the authenticated_route
-@app.post("/products/", response_model=ProductRead, tags=["products"])
+@app.post(
+    "/products/",
+    response_model=ProductRead,
+    tags=["products"],
+    responses={200: {"description": "Product created successfully"}}
+)
 async def create_product(
     product: ProductCreate,
     user: User = Depends(current_active_user),
@@ -183,12 +190,10 @@ async def create_product(
     if not user.is_superuser:
         raise HTTPException(status_code=403, detail="Only superusers can add products")
     
-    # Validate the existence of the category_id
     category = await db.get(Category, product.category_id)
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
     
-    # Parse discount_start and discount_end into datetime objects
     product_data = product.model_dump()
     if "discount_start" in product_data and product_data["discount_start"]:
         product_data["discount_start"] = datetime.fromisoformat(product_data["discount_start"].replace("Z", "+00:00"))
@@ -201,62 +206,87 @@ async def create_product(
     await db.refresh(db_product)
     return db_product
 
-@app.get("/products/", response_model=List[ProductRead], tags=["products"])
+@app.get(
+    "/products/",
+    response_model=List[ProductRead],
+    tags=["products"],
+    responses={200: {"description": "Products retrieved successfully"}}
+)
 async def read_products(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_async_session)
 ):
-    result = await db.execute(select(Product).offset(skip).limit(limit))
-    products = result.scalars().all()
-    return products
+    result = await db.execute(
+        select(Product).offset(skip).limit(limit).order_by(Product.created_at.desc())
+    )
+    return result.scalars().all()
 
-@app.get("/products/{product_id}", response_model=ProductRead, tags=["products"])
+@app.get(
+    "/products/{product_id}",
+    response_model=ProductRead,
+    tags=["products"],
+    responses={200: {"description": "Product retrieved successfully"}}
+)
 async def read_product(
-    product_id: UUID,  # Updated to product_id
+    product_id: UUID,
     db: AsyncSession = Depends(get_async_session)
 ):
-    product = await db.get(Product, product_id)  # Updated to product_id
+    product = await db.get(Product, product_id)
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
     return product
 
-@app.put("/products/{product_id}", response_model=ProductRead, tags=["products"])
+@app.put(
+    "/products/{product_id}",
+    response_model=ProductRead,
+    tags=["products"],
+    responses={200: {"description": "Product updated successfully"}}
+)
 async def update_product(
-    product_id: UUID,  # Updated to product_id
+    product_id: UUID,
     product_update: ProductUpdate,
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session)
 ):
     if not user.is_superuser:
         raise HTTPException(status_code=403, detail="Only superusers can update products")
-    db_product = await db.get(Product, product_id)  # Updated to product_id
+    db_product = await db.get(Product, product_id)
     if db_product is None:
         raise HTTPException(status_code=404, detail="Product not found")
     update_data = product_update.model_dump(exclude_unset=True)
-    update_data["updated_at"] = datetime.now()  # Update the updated_at field
+    update_data["updated_at"] = datetime.now()
     for key, value in update_data.items():
         setattr(db_product, key, value)
     await db.commit()
     await db.refresh(db_product)
     return db_product
 
-@app.delete("/products/{product_id}", tags=["products"])
+@app.delete(
+    "/products/{product_id}",
+    tags=["products"],
+    responses={200: {"description": "Product deleted successfully"}}
+)
 async def delete_product(
-    product_id: UUID,  # Updated to product_id
+    product_id: UUID,
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session)
 ):
     if not user.is_superuser:
         raise HTTPException(status_code=403, detail="Only superusers can delete products")
-    db_product = await db.get(Product, product_id)  # Updated to product_id
+    db_product = await db.get(Product, product_id)
     if db_product is None:
         raise HTTPException(status_code=404, detail="Product not found")
     await db.delete(db_product)
     await db.commit()
     return {"message": "Product deleted successfully"}
 
-@app.post("/categories/", response_model=CategoryRead, tags=["categories"])
+@app.post(
+    "/categories/",
+    response_model=CategoryRead,
+    tags=["categories"],
+    responses={200: {"description": "Category created successfully"}}
+)
 async def create_category(
     category: CategoryCreate,
     user: User = Depends(current_active_user),
@@ -271,17 +301,28 @@ async def create_category(
     await db.refresh(db_category)
     return db_category
 
-@app.get("/categories/", response_model=List[CategoryRead], tags=["categories"])
+@app.get(
+    "/categories/",
+    response_model=List[CategoryRead],
+    tags=["categories"],
+    responses={200: {"description": "Categories retrieved successfully"}}
+)
 async def read_categories(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_async_session)
 ):
-    result = await db.execute(select(Category).offset(skip).limit(limit))
-    categories = result.scalars().all()
-    return categories
+    result = await db.execute(
+        select(Category).offset(skip).limit(limit).order_by(Category.created_at.desc())
+    )
+    return result.scalars().all()
 
-@app.get("/categories/{category_id}", response_model=CategoryRead, tags=["categories"])
+@app.get(
+    "/categories/{category_id}",
+    response_model=CategoryRead,
+    tags=["categories"],
+    responses={200: {"description": "Category retrieved successfully"}}
+)
 async def read_category(
     category_id: UUID,
     db: AsyncSession = Depends(get_async_session)
@@ -291,7 +332,12 @@ async def read_category(
         raise HTTPException(status_code=404, detail="Category not found")
     return category
 
-@app.put("/categories/{category_id}", response_model=CategoryRead, tags=["categories"])
+@app.put(
+    "/categories/{category_id}",
+    response_model=CategoryRead,
+    tags=["categories"],
+    responses={200: {"description": "Category updated successfully"}}
+)
 async def update_category(
     category_id: UUID,
     category_update: CategoryUpdate,
@@ -304,14 +350,18 @@ async def update_category(
     if db_category is None:
         raise HTTPException(status_code=404, detail="Category not found")
     update_data = category_update.model_dump(exclude_unset=True)
-    update_data["updated_at"] = datetime.now()  # Update the updated_at field
+    update_data["updated_at"] = datetime.now()
     for key, value in update_data.items():
         setattr(db_category, key, value)
     await db.commit()
     await db.refresh(db_category)
     return db_category
 
-@app.delete("/categories/{category_id}", tags=["categories"])
+@app.delete(
+    "/categories/{category_id}",
+    tags=["categories"],
+    responses={200: {"description": "Category deleted successfully"}}
+)
 async def delete_category(
     category_id: UUID,
     user: User = Depends(current_active_user),
@@ -333,7 +383,8 @@ admin_router = APIRouter(prefix="/admin", tags=["admin"])
     "/list",
     response_model=List[AdminRead],
     summary="List all admins",
-    description="Retrieve a list of all admin users, including details about who granted them admin privileges and when."
+    description="Retrieve a list of all admin users, including details about who granted them admin privileges and when.",
+    responses={200: {"description": "Admins retrieved successfully"}}
 )
 async def list_admins(
     user: User = Depends(current_active_user),
@@ -350,7 +401,8 @@ async def list_admins(
     "/add",
     response_model=AdminRead,
     summary="Add a new admin",
-    description="Promote a user to admin by setting their `is_superuser` flag to `True`. Tracks who granted the admin privileges and when."
+    description="Promote a user to admin by setting their `is_superuser` flag to `True`. Tracks who granted the admin privileges and when.",
+    responses={200: {"description": "Admin added successfully"}}
 )
 async def add_admin(
     admin_data: AdminCreate,
@@ -378,7 +430,8 @@ async def add_admin(
     "/remove/{admin_id}",
     response_model=AdminRead,
     summary="Remove an admin",
-    description="Revoke admin privileges from a user by setting their `is_superuser` flag to `False`. Clears the tracking fields for admin privileges."
+    description="Revoke admin privileges from a user by setting their `is_superuser` flag to `False`. Clears the tracking fields for admin privileges.",
+    responses={200: {"description": "Admin removed successfully"}}
 )
 async def remove_admin(
     admin_id: UUID,
@@ -401,6 +454,24 @@ async def remove_admin(
     await db.commit()
     await db.refresh(admin)
     return admin
+
+@admin_router.get(
+    "/users",
+    response_model=List[UserRead],
+    summary="List all users",
+    description="Retrieve a list of all users. Only accessible by superusers.",
+    responses={200: {"description": "Users retrieved successfully"}}
+)
+async def list_users(
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    if not user.is_superuser:
+        raise HTTPException(status_code=403, detail="Only superusers can access this route")
+    
+    result = await db.execute(select(User))
+    users = result.scalars().all()
+    return users
 
 # Include the admin router
 app.include_router(admin_router)

@@ -41,7 +41,12 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
     admin_granted_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID, nullable=True)
     admin_granted_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
 
-engine = create_async_engine(DATABASE_URL)
+engine = create_async_engine(
+    DATABASE_URL,
+    pool_size=10,  # Set connection pool size for production
+    max_overflow=20,  # Allow additional connections beyond the pool size
+    pool_timeout=30,  # Timeout for acquiring a connection
+)
 async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
 
 async def create_db_and_tables():
@@ -49,10 +54,15 @@ async def create_db_and_tables():
         await conn.run_sync(Base.metadata.create_all)
 
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
+    """Use a single session per request and ensure proper cleanup."""
     async with async_session_maker() as session:
-        yield session
+        try:
+            yield session
+        finally:
+            await session.close()
 
 async def get_user_db(session: AsyncSession = Depends(get_async_session)):
+    """Yield user database with optimized session handling."""
     yield SQLAlchemyUserDatabase(session, User)
 
 class Product(Base):
